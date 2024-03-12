@@ -12,9 +12,10 @@ class Wheel:
         self.reads = 0
     
     def setup_callback(self):
-        GPIO.add_event_detect(self.pin, GPIO.RISING, callback = self.iterate)
+        GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = self.iterate)
     
-    def iterate(self):
+    def iterate(self, pin):
+        '''add event detect by defualt passes back the channel (pin) on which it was set up. '''
         self.reads += 1
         print(f'{self.ID}: {self.reads}')
     

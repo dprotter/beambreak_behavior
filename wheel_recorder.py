@@ -1,14 +1,14 @@
 from wheel import Wheel
-import datetime as datetime
+from datetime import datetime
 import os as os
 import time as time
 import csv
 import RPi.GPIO as GPIO
 
 
-save_location = '~/'
-wheels_pins = [11]
-animal_nums = [500] #going to make this procedurally at runtime
+save_location = '/home/donaldsonlab/temp_wheel_data'
+wheels_pins = [21]
+animal_nums = [000] #going to make this procedurally at runtime
 time_interval = 0.1 #50ms between recording. note that the wheel will still iterate
 duration = 30 #30 sec for testing
 
@@ -23,6 +23,7 @@ def make_filepath(save_location, animal_nums):
     file = f'{date.month}_{date.day}_{date.year}__{date.hour}_{date.minute}__'
     for animal in sorted(animal_nums):
         file += f'{animal}_'
+    file+= '.csv'
     return os.path.join(save_location, file)
 
 def create_csv(filepath, animal_nums):
@@ -47,7 +48,7 @@ create_csv(filepath, animal_nums)
 
 
 start_time = time.time()
-[wheel.setup_callback for _, wheel in wheels.items()]
+[wheel.setup_callback() for _, wheel in wheels.items()]
 
 while time.time() - start_time < duration:
     row = make_row(start_time, wheels)
