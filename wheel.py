@@ -17,7 +17,8 @@ class Wheel:
     def iterate(self, pin):
         '''add event detect by defualt passes back the channel (pin) on which it was set up. '''
         self.reads += 1
-        print(f'{self.ID}: {self.reads}')
+        if self.reads % 10 == 1:
+            print(f'{self.ID}: {self.reads}')
     
     def get_ID(self):
         return self.ID
