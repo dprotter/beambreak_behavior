@@ -19,6 +19,8 @@ except Exception as e:
 import queue
 import inspect
 
+thread_executor = ThreadPoolExecutor(max_workers = 20)
+
 def thread_it(func):
         '''simple decorator to pass function to our thread distributor via a queue. 
         these 4 lines took about 4 hours of googling and trial and error.
@@ -31,20 +33,32 @@ def thread_it(func):
 
             new_kwargs = {k:v for k, v in bound_args_dict.items() if k not in ('self')}
             #print(f'submitting {func}')
-            future = self.box.thread_executor.submit(func,self, **new_kwargs)
+            future = thread_executor.submit(func, self, **new_kwargs)
             return future
         return pass_to_thread
-
+    
+class FakeTimestampManager:
+    def __init__(self, *args, **kwargs):
+        ''''''
+        
+    
+    def write_timestamp(self, *args, **kwargs):
+        print(f'writing a timestamp {args} {kwargs}')
+        pass
+    
 class IR_beambreak:
     
     def __init__(self, pin_number, pullup_pulldown = 'pullup', timestamp_writer = None):
         ''''''
-        self.timestamp_writer = timestamp_writer if not timestamp_writer == None else Fake_timestamp_writer()
+        self.timestamp_writer = timestamp_writer if not timestamp_writer == None else FakeTimestampManager()
         self.pin_number = pin_number
         self.pu_pd = pullup_pulldown    
         self.pin = pin_number
         GPIO.setup(self.pin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
+        self.testing = False
     
+    def stop_testing(self):
+        self.testing = False
     def set_callback(self, func):
          GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = func)
         
@@ -57,70 +71,82 @@ class IR_beambreak:
     
     def is_blocked(self):
         return self.pin.value == self.blocked_value
-    
+    def clear_callback(self):
+        GPIO.remove_event_detect(self.pin)
     @thread_it
     def test_IR_with_LED(self, LED):        
+        print('beginning LED test')
+        self.testing = True
         try:
-            while True:
+            while self.testing:
                 if GPIO.input(self.pin) == 0:
+                    
                     LED.set_on()
                 else:
                     LED.set_off()
                 time.sleep(0.05)
-        except KeyboardInterrupt:
+        except:
+            LED.set_off()
             print(f'done with IR test for pin {self.pin}')
+        LED.set_off()
                     
-class button:
+class Button:
     
-    def __init__(self, pin_number, pullup_pulldown = 'pulldown', timestamp_writer = None):
+    def __init__(self, pin_number, pullup_pulldown = 'pullup', timestamp_writer = None):
         ''''''
-        self.timestamp_writer = timestamp_writer if not timestamp_writer == None else Fake_timestamp_writer()
+        self.timestamp_writer = timestamp_writer if not timestamp_writer == None else FakeTimestampManager()
         self.pin = pin_number
         self.pu_pd = pullup_pulldown 
         GPIO.setup(self.pin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
         self.blocked_value = 1    
     
-    def set_callback(self, func):
-         GPIO.add_event_detect(self.pin, GPIO.RISING, callback = func)
+    def set_callback(self, func, bouncetime = 500):
+         GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = func)
+    def clear_callback(self):
+        GPIO.remove_event_detect(self.pin)
 
-class beambreak_LED_Button_combo:
-    def __init__(self, beambreak, led, button, id, timeout, ts_writer = None, screen_writer = None):
+class Beambreak_LED_Button_Combo:
+    def __init__(self, beambreak, led, button, id, timestamp_writer = None, screen_writer = None):
         self.ID = id
         self.traversal_counts = 0
         self.beambreak = beambreak
         self.LED = led
         self.button = button
-        self.timeout = timeout
-
-        self.LED.set_on
-        self.write_to_screen = screen_writer.write if screen_writer == None else self.write_to_screen
-        self.timestamp_put = ts_writer.write_timestamp if ts_writer else self.fake_write_timestamp
-        self.beambreak.callback()
+        self.timestamp_writer = timestamp_writer if not timestamp_writer == None else FakeTimestampManager()
+        self.write_to_screen = self.write_to_screen if screen_writer == None else screen_writer.write
     
-    def entry_state(self):
-        self.LED.set_off()
-        self.button.wait_for_press()
-        self.beambreak.set_callback(self.beam_broken_state)
+    def entry_state(self, reward_time = 45):
+        ''''''
+        print('entry state')
+        self.reward_time = reward_time
+        self.LED.set_on()
+        self.button.set_callback(self.ready_state)
     
-    def ready_state(self):
-        self.write_to_screen(f'traversal_counts for {self.id}: {self.traversal_counts}')
-        self.timestamp_put((self.ID, time.time(), 'reset'))
+    def ready_state(self, channnel):
+        self.beambreak.clear_callback()
+        self.button.clear_callback()
+        print('ready state')
+        self.write_to_screen(f'traversal_counts for {self.ID}: {self.traversal_counts}')
+        self.timestamp_writer.write_timestamp((self.ID, time.time(), 'reset'))
         self.LED.set_off()
         self.beambreak.set_callback(self.beam_broken_state)
 
-    def beam_broken_state(self):
+    def beam_broken_state(self, channel):
+        self.beambreak.clear_callback()
+        self.button.clear_callback()
+        print('beam_broken state')
         self.traversal_counts += 1
-        self.write_to_screen(f'traversal_counts for {self.id}: {self.traversal_counts}')
-        self.timestamp_put((self.ID, time.time(), 'beam_break'))
+        self.write_to_screen(f'traversal_counts for {self.ID}: {self.traversal_counts}')
+        self.timestamp_writer.write_timestamp((self.ID, time.time(), 'beam break'))
         
         start = time.time()
-        while time.time() - start < self.timeout:
+        while time.time() - start < self.reward_time:
             time.sleep(0.1)
         self.LED.set_on()
         self.button.set_callback(self.ready_state)
     
     def write_to_screen(self, message):
-        print(f'beambreak {self.id}:\n{message}\n\n')  
+        print(f'beambreak {self.ID}:\n{message}\n\n')  
 
 class LED:
     def __init__(self, HAT_pin):
@@ -135,6 +161,18 @@ class LED:
     def set_active_HAT(self, percent = 100):
         self.active = True
         self.channel.duty_cycle = self.hat_PWM_hex_from_percent(percent)
+        
+    def hat_PWM_hex_from_percent(self, percent = 100, int_bit = 16, max_value = None):
+        vals = {16:65535, 12: 4095, 8: 255}
+        if max_value:
+            max_value = max_value
+        else:
+            try:
+                max_val = vals[int(int_bit)]
+            except:
+                print(f'expected a int_bit value of 8, 12, or 16, but received: {int_bit}. you may also pass a max_value for your PWM generator directly as max_value')
+        integer = int(percent * max_val / 100)
+        return integer
         
     def set_inactive_HAT(self):
         self.active = False
