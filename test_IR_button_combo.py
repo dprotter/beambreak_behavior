@@ -13,6 +13,6 @@ try:
 except:
     led.set_off()
 
-led.set_off()
+box.exit_state()
 
 

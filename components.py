@@ -36,7 +36,8 @@ def thread_it(func):
             future = thread_executor.submit(func, self, **new_kwargs)
             return future
         return pass_to_thread
-    
+
+
 class FakeTimestampManager:
     def __init__(self, *args, **kwargs):
         ''''''
@@ -73,6 +74,7 @@ class IR_beambreak:
         return self.pin.value == self.blocked_value
     def clear_callback(self):
         GPIO.remove_event_detect(self.pin)
+    
     @thread_it
     def test_IR_with_LED(self, LED):        
         print('beginning LED test')
@@ -120,6 +122,8 @@ class Beambreak_LED_Button_Combo:
         self.exit = True
     
     def exit_state(self):
+        self.beambreak.clear_callback()
+        self.button.clear_callback()
         self.beambreak.set_callback(self.set_exit_to_true)
         self.LED.flash(frequency = 0.5, interrupt_func = self.exit_func)
         
@@ -131,14 +135,19 @@ class Beambreak_LED_Button_Combo:
         print('entry state')
         self.reward_time = reward_time
         self.LED.set_on()
-        self.button.set_callback(self.ready_state)
+        self.button.set_callback(self.begin)
     
-    def ready_state(self, channnel):
+    def begin(self):
+        self.button.clear_callback()
+        self.start_time = time.time()
+        self.ready_state()
+        
+    def ready_state(self):
         self.beambreak.clear_callback()
         self.button.clear_callback()
         print('ready state')
         self.write_to_screen(f'traversal_counts for {self.ID}: {self.traversal_counts}')
-        self.timestamp_writer.write_timestamp((self.ID, time.time(), 'reset'))
+        self.timestamp_writer.write_timestamp((self.ID, self.start_time - time.time(), 'reset'))
         self.LED.set_off()
         self.beambreak.set_callback(self.beam_broken_state)
 
@@ -148,7 +157,7 @@ class Beambreak_LED_Button_Combo:
         print('beam_broken state')
         self.traversal_counts += 1
         self.write_to_screen(f'traversal_counts for {self.ID}: {self.traversal_counts}')
-        self.timestamp_writer.write_timestamp((self.ID, time.time(), 'beam break'))
+        self.timestamp_writer.write_timestamp((self.ID, self.start_time - time.time(), 'beam break'))
         
         start = time.time()
         while time.time() - start < self.reward_time:

@@ -1,3 +1,5 @@
+from components import thread_it, thread_executor
+
 class TimestampSaver:
     
     def __init__(self, header, filepath, delimeter = ','):
@@ -16,7 +18,9 @@ class TimestampSaver:
             line_string =  self.delimter.join(str(bit) for bit in line)
             f.write(line_string)
             
-    
+class TimestampManager:
+    def __init__(self, path, animal_number, ):
+           ''''''
     
     
     
