@@ -92,10 +92,22 @@ class beambreak_LED_Button_combo:
         self.button = button
         self.timeout = timeout
 
+        self.exit = False
+        
         self.LED.set_on
         self.write_to_screen = screen_writer.write if screen_writer == None else self.write_to_screen
         self.timestamp_put = ts_writer.write_timestamp if ts_writer else self.fake_write_timestamp
         self.beambreak.callback()
+    
+    def set_exit_to_true(self):
+        self.exit = True
+    
+    def exit_state(self):
+        self.beambreak.set_callback(self.set_exit_to_true)
+        self.LED.flash(frequency = 0.5, interrupt_func = self.exit_func)
+        
+    def exit_func(self):
+        return self.exit
     
     def entry_state(self):
         self.LED.set_off()
@@ -139,3 +151,29 @@ class LED:
     def set_inactive_HAT(self):
         self.active = False
         self.channel.duty_cycle = 0
+    
+    @thread_it
+    def flash(self, frequency, interrupt_func):
+        '''given a frequency in seconds, flash on for 1/2, off for 1/2 of that 
+        frequency until interrupt_func returns True'''
+        half_freq = frequency/2
+        while not interrupt_func():
+            self.set_on()
+            start = time.time()
+            while (time.time() - start) < half_freq:
+                if interrupt_func():
+                    break
+                else:
+                    time.sleep(0.1)
+            self.set_off()
+            start = time.time()
+            if not interrupt_func():
+                while (time.time() - start) < half_freq:
+                    if interrupt_func():
+                        break
+                    else:
+                        time.sleep(0.1)
+        self.set_off()
+            
+            
+        
