@@ -188,7 +188,7 @@ class Two_Beambreak_LED_Button_Combo:
         print(f'{self.ID} reward period over')
         self.LED.set_on()
         self.button.set_callback(self.ready_state)
-        self.timestamp_writer.write_timestamp((self.ID, beam_ID, self.start_time - time.time(), 'reward_period_end','', '', notes))
+        self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time, 'reward_period_end','', '', notes))
     def write_to_screen(self, message):
         print(f'\n{self.ID}: {message}\n')
         
