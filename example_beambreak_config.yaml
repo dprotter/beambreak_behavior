@@ -1,0 +1,49 @@
+animals:
+#titles here must match the names of the boxes
+#in the 'hardware' section
+  box_1:
+    focal: 7000
+    side_notes:
+      ir_1: 'partner'
+      ir_2: 'novel'
+
+  # box_2:
+  #   focal: 7001
+  #   ir_1: 'partner'
+  #   ir_2: 'novel'
+
+  # box_3:
+  #   focal: 7002
+  #   ir_1: 'partner'
+  #   ir_2: 'novel'
+
+  # box_4:
+  #   focal: 7003
+  #   ir_1: 'partner'
+  #   ir_2: 'novel'
+
+software:
+  reward_period: 5
+  total_time: 20
+  save_path: '/home/donaldsonlab/yana/outputs'
+
+hardware:
+  box_1:
+    ir_1: 20
+    ir_2: 21
+    button: 4
+    led: 0
+  # box_2:
+  #   ir_1: 19
+  #   ir_2: 21
+  #   button: 17
+  # box_3:
+  #   ir_1: 19
+  #   ir_2: 21
+  #   button: 17
+  # box_4:
+  #   ir_1: 19
+  #   ir_2: 21
+  #   button: 17
+  
+  
