@@ -11,7 +11,7 @@ import yaml
 import datetime
 import pdb
 import time
-
+from component import GPIO
 args = parser.parse_args()
 
 def make_beambreak_pair(yaml_file, box_id, timestamp_writer):
@@ -81,6 +81,8 @@ while any([cycle - b.ir_pair.start_time < config_dict['software']['total_time'] 
     [b.ir_pair.exit_state() for b in boxes if cycle - b.ir_pair.start_time > config_dict['software']['total_time'] if not b.ir_pair.state == 'reward' if not b.ir_pair.state == 'exit']
     time.sleep(0.250)
     cycle = time.time()
+    
+GPIO.cleanup()
 
 
 

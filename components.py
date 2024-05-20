@@ -170,12 +170,13 @@ class Two_Beambreak_LED_Button_Combo:
         self.beambreak_1.clear_callback()
         self.beambreak_2.clear_callback()
         self.button.clear_callback()
+        self.LED.set_off()
         print('ready state')
         self.state = 'ready'
         self.write_to_screen(f'traversal_counts for {self.ID}: {self.traversal_counts}')
         self.timestamp_writer.write_timestamp((self.ID, '', time.time() - self.start_time, 'reset', ''))
         self.latency_from = time.time()
-        self.LED.set_off()
+        
         self.beambreak_1.set_callback(func=lambda x: self.beam_broken_state(1, self.notes_1))
         self.beambreak_2.set_callback(func=lambda x: self.beam_broken_state(2, self.notes_2))
 
@@ -193,7 +194,7 @@ class Two_Beambreak_LED_Button_Combo:
         while time.time() - start < self.reward_time:
             time.sleep(0.1)
         print(f'{self.ID} reward period over')
-        self.LED.flash(frequency = 0.5)
+        self.LED.flash(frequency = 0.5, interrupt_func = self.LED.interrupt_LED)
         self.button.set_callback(self.ready_state)
         self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time, 'reward_period_end','', '', notes))
     
@@ -210,6 +211,7 @@ class LED:
         self.set_on = self.set_active_HAT
         self.set_off = self.set_inactive_HAT
         self.is_active = False
+        
         
     def set_active_HAT(self, percent = 100):
         self.active = True
@@ -231,29 +233,38 @@ class LED:
         self.active = False
         self.channel.duty_cycle = 0
     
+    def flash_on(self, percent = 100):
+        self.channel.duty_cycle = self.hat_PWM_hex_from_percent(percent)
+        
+    def flash_off(self):
+        self.channel.duty_cycle = 0
+    
     def is_active(self):
         return self.active
     
     def interrupt_LED(self):
         '''return True when attribute self.active is False to interrupt ongoing flashing'''
+        
         return not self.active
     
     @thread_it
-    def flash(self, frequency, interrupt_func = interrupt_LED):
+    def flash(self, frequency, interrupt_func, percent = 100, ):
         '''given a frequency in seconds, flash on for 1/2, off for 1/2 of that 
         frequency until interrupt_func returns True'''
         
-        print('flashing LED')
+        
         half_freq = frequency/2
+        self.active = True
         while not interrupt_func():
-            self.set_on()
+            self.flash_on(percent = percent)
             start = time.time()
             while (time.time() - start) < half_freq:
                 if interrupt_func():
                     break
                 else:
                     time.sleep(0.1)
-            self.set_off()
+            
+            self.flash_off()
             start = time.time()
             if not interrupt_func():
                 while (time.time() - start) < half_freq:
@@ -261,6 +272,7 @@ class LED:
                         break
                     else:
                         time.sleep(0.1)
+        
         self.set_off()
             
             
