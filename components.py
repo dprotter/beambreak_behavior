@@ -59,6 +59,7 @@ class IR_beambreak:
         self.pin = pin_number
         GPIO.setup(self.pin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
         self.testing = False
+        self.blocked_value = 0
     
     def stop_testing(self):
         self.testing = False
@@ -73,7 +74,8 @@ class IR_beambreak:
             func()'''
     
     def is_blocked(self):
-        return self.pin.value == self.blocked_value
+        return GPIO.input(self.pin) == self.blocked_value
+    
     def clear_callback(self):
         GPIO.remove_event_detect(self.pin)
     
@@ -152,6 +154,17 @@ class Two_Beambreak_LED_Button_Combo:
     def entry_state(self, reward_time = 45):
         ''''''
         print('entry state')
+        if self.beambreak_1.is_blocked():
+            print(f'box {self.name} beambreak 1 is blocked')
+        
+        if self.beambreak_1.is_blocked():
+            print(f'box {self.name} beambreak 2 is blocked')
+        
+        if self.beambreak_1.is_blocked() or self.beambreak_2.is_blocked():
+            print('waiting for beambreaks to be unblocked')
+            while self.beambreak_1.is_blocked() or self.beambreak_2.is_blocked():
+                time.sleep(0.5)
+        
         self.state = 'entry'
         self.reward_time = reward_time
         self.LED.set_on()

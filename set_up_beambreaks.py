@@ -12,6 +12,7 @@ import datetime
 import pdb
 import time
 from components import GPIO
+from tabulate import tabulate
 args = parser.parse_args()
 
 def make_beambreak_pair(yaml_file, box_id, timestamp_writer):
@@ -66,25 +67,28 @@ for box_ID in config_dict['hardware'].keys():
     writer = TimestampManager(fpath, filename)
     beambreak_pair = make_beambreak_pair(config_dict, box_ID, writer)
     box.add_component(beambreak_pair, 'ir_pair')
-    box.ir_pair.entry_state(reward_time = config_dict['software']['reward_period'])
     boxes += [box]
-
-i = 0  
-while any([not b.ir_pair.started for b in boxes]):
-    i+=1
-    if i%15 == 0:
-        print('waiting to start')
-    time.sleep(0.1)
-print('done waiting to start')
-cycle = time.time()
-while any([cycle - b.ir_pair.start_time < config_dict['software']['total_time'] for b in boxes]) or any([not b.ir_pair.exit for b in boxes]):
-    [b.ir_pair.exit_state() for b in boxes if cycle - b.ir_pair.start_time > config_dict['software']['total_time'] if not b.ir_pair.state == 'reward' if not b.ir_pair.state == 'exit']
-    time.sleep(0.250)
-    cycle = time.time()
     
-GPIO.cleanup()
 
+time.sleep(1)
+def print_pin_status(box_list):
+    num_IRs = len(box_list)*2
 
-
+    print("\033c", end="")
     
-    
+    status = []
+    for box in box_list:
+        ir1 = box.ir_pair.beambreak_1
+        ir2 = box.ir_pair.beambreak_2
+        
+        status += [[box.name, 'ir_1', ir1.is_blocked(), 'ir_2', ir2.is_blocked()]]
+    print(tabulate(status, headers = ['box', 'ir', 'status', 'ir', 'status']))
+    time.sleep(0.05)
+
+try:
+    while True:
+        print_pin_status(boxes)
+        time.sleep(0.05) 
+
+except KeyboardInterrupt:
+    print('\n\ncleaning up')
