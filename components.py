@@ -128,9 +128,13 @@ class Two_Beambreak_LED_Button_Combo:
         self.header_list = ['ID', 'beam', 'elapsed_time', 'event','count', 'latency','notes']
         self.timestamp_writer.create_file(self.header_list)
         self.state = None
+    
+    def shut_down(self, channel = None):
+        '''func to finish this IR pair run. turn off LEDs and set exit attribute to true'''
+        self.LED.set_off()
+        self.set_exit_to_true()
         
-        
-    def set_exit_to_true(self, channel):
+    def set_exit_to_true(self, channel = None):
         self.exit = True
     
     def exit_state(self):
@@ -139,8 +143,8 @@ class Two_Beambreak_LED_Button_Combo:
         self.beambreak_2.clear_callback()
         self.state = 'exit'
         self.button.clear_callback()
-        self.button.set_callback(self.set_exit_to_true)
-        self.LED.flash(frequency = 0.5, interrupt_func = self.exit_func)
+        self.button.set_callback(self.shut_down)
+        self.LED.set_on()
         
     def exit_func(self):
         return self.exit
@@ -153,13 +157,16 @@ class Two_Beambreak_LED_Button_Combo:
         self.LED.set_on()
         self.button.set_callback(self.begin)
     
-    def begin(self, channel):
+    def check_state(self, state_query):
+        return self.state == state_query
+    
+    def begin(self, channel = None):
         self.button.clear_callback()
         self.start_time = time.time()
         self.started = True
         self.ready_state(channel)
         
-    def ready_state(self, channel):
+    def ready_state(self, channel = None):
         self.beambreak_1.clear_callback()
         self.beambreak_2.clear_callback()
         self.button.clear_callback()
@@ -186,9 +193,10 @@ class Two_Beambreak_LED_Button_Combo:
         while time.time() - start < self.reward_time:
             time.sleep(0.1)
         print(f'{self.ID} reward period over')
-        self.LED.set_on()
+        self.LED.flash(frequency = 0.5)
         self.button.set_callback(self.ready_state)
         self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time, 'reward_period_end','', '', notes))
+    
     def write_to_screen(self, message):
         print(f'\n{self.ID}: {message}\n')
         
@@ -201,6 +209,7 @@ class LED:
         self.type = 'HAT'
         self.set_on = self.set_active_HAT
         self.set_off = self.set_inactive_HAT
+        self.is_active = False
         
     def set_active_HAT(self, percent = 100):
         self.active = True
@@ -222,10 +231,18 @@ class LED:
         self.active = False
         self.channel.duty_cycle = 0
     
+    def is_active(self):
+        return self.active
+    
+    def interrupt_LED(self):
+        '''return True when attribute self.active is False to interrupt ongoing flashing'''
+        return not self.active
+    
     @thread_it
-    def flash(self, frequency, interrupt_func):
+    def flash(self, frequency, interrupt_func = interrupt_LED):
         '''given a frequency in seconds, flash on for 1/2, off for 1/2 of that 
         frequency until interrupt_func returns True'''
+        
         print('flashing LED')
         half_freq = frequency/2
         while not interrupt_func():

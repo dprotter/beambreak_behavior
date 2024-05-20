@@ -29,8 +29,8 @@ software:
 
 hardware:
   box_1:
-    ir_1: 20
-    ir_2: 21
+    ir_1: 17
+    ir_2: 18
     button: 4
     led: 0
   # box_2:
