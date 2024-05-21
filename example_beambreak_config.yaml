@@ -3,6 +3,7 @@ animals:
 #in the 'hardware' section
   box_1:
     focal: 7000
+    novel: None
     side_notes:
       ir_1: 'partner'
       ir_2: 'novel'

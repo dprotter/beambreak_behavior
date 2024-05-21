@@ -12,6 +12,7 @@ import datetime
 import pdb
 import time
 from components import GPIO
+import csv
 args = parser.parse_args()
 
 def make_beambreak_pair(yaml_file, box_id, timestamp_writer):
@@ -83,6 +84,32 @@ while any([cycle - b.ir_pair.start_time < config_dict['software']['total_time'] 
     cycle = time.time()
     
 GPIO.cleanup()
+
+
+header = ['box', 'animal', 'IR_1_traversals','IR_1_notes', 'IR_2_traversals','IR_2_notes', 'novel_ID']
+
+
+summary_file = default_generate_output_fname('summary',date) + '.csv'
+summary_fpath = os.path.join(fpath, summary_file)
+with open(summary_fpath, 'w') as f:
+    writer = csv.writer(f)
+    writer.writerow(header)
+
+for box in boxes:
+    ir = box.ir_pair
+    data=[box.name, 
+            config_dict['animals'][box.name]['focal'], 
+            ir.traversal_counts[1], 
+            ir.notes_1,
+            ir.traversal_counts[2],
+            ir.notes_2,
+            config_dict['animals'][box.name]['novel']]
+    
+    with open(summary_fpath, 'a') as f:
+        writer = csv.writer(f)
+        writer.writerow(data)
+
+
 
 
 

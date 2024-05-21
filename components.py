@@ -168,6 +168,7 @@ class Two_Beambreak_LED_Button_Combo:
         self.state = 'entry'
         self.reward_time = reward_time
         self.LED.set_on()
+        self.latency_from = time.time()
         self.button.set_callback(self.begin)
     
     def check_state(self, state_query):
@@ -187,7 +188,7 @@ class Two_Beambreak_LED_Button_Combo:
         print('ready state')
         self.state = 'ready'
         self.write_to_screen(f'traversal_counts for {self.ID}: {self.traversal_counts}')
-        self.timestamp_writer.write_timestamp((self.ID, '', time.time() - self.start_time, 'reset', ''))
+        self.timestamp_writer.write_timestamp((self.ID, '', time.time() - self.start_time, 'reset', '', time.time()-self.latency_from, ''))
         self.latency_from = time.time()
         
         self.beambreak_1.set_callback(func=lambda x: self.beam_broken_state(1, self.notes_1))
@@ -210,7 +211,8 @@ class Two_Beambreak_LED_Button_Combo:
         self.LED.flash(frequency = 0.5, interrupt_func = self.LED.interrupt_LED)
         self.button.set_callback(self.ready_state)
         self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time, 'reward_period_end','', '', notes))
-    
+        self.latency_from = time.time()
+        
     def write_to_screen(self, message):
         print(f'\n{self.ID}: {message}\n')
         
