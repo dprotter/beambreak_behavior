@@ -74,7 +74,7 @@ i = 0
 while any([not b.ir_pair.started for b in boxes]):
     i+=1
     if i%15 == 0:
-        print('waiting to start')
+        print(f'waiting to start: {[b.name  for b in boxes if not b.ir_pair.started]}')
     time.sleep(0.1)
 print('done waiting to start')
 cycle = time.time()

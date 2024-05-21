@@ -107,7 +107,7 @@ class Button:
     
     def set_callback(self, func, bouncetime = 1000):
         print(f'setting callback on {self.pin}')
-        GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = func)
+        GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = func, bouncetime = bouncetime)
     def clear_callback(self):
         GPIO.remove_event_detect(self.pin)
 
@@ -133,6 +133,7 @@ class Two_Beambreak_LED_Button_Combo:
     
     def shut_down(self, channel = None):
         '''func to finish this IR pair run. turn off LEDs and set exit attribute to true'''
+        print(f'{self.ID} shut down')
         self.LED.set_off()
         self.set_exit_to_true()
         
@@ -146,6 +147,7 @@ class Two_Beambreak_LED_Button_Combo:
         self.state = 'exit'
         self.button.clear_callback()
         self.button.set_callback(self.shut_down)
+        print(f'{self.ID} in exit state')
         self.LED.set_on()
         
     def exit_func(self):

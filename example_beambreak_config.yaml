@@ -8,10 +8,14 @@ animals:
       ir_1: 'partner'
       ir_2: 'novel'
 
-  # box_2:
-  #   focal: 7001
-  #   ir_1: 'partner'
-  #   ir_2: 'novel'
+  box_2:
+    focal: 7001
+    novel: None
+    ir_1: 'partner'
+    ir_2: 'novel'
+    side_notes:
+      ir_1: 'partner'
+      ir_2: 'novel'
 
   # box_3:
   #   focal: 7002
@@ -24,8 +28,8 @@ animals:
   #   ir_2: 'novel'
 
 software:
-  reward_period: 5
-  total_time: 20
+  reward_period: 3
+  total_time: 60
   save_path: '/home/donaldsonlab/yana/outputs'
 
 hardware:
@@ -34,10 +38,11 @@ hardware:
     ir_2: 18
     button: 4
     led: 0
-  # box_2:
-  #   ir_1: 19
-  #   ir_2: 21
-  #   button: 17
+  box_2:
+    ir_1: 22
+    ir_2: 23
+    button: 27
+    led: 1
   # box_3:
   #   ir_1: 19
   #   ir_2: 21
