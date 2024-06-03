@@ -37,17 +37,18 @@ def thread_it(func):
             future = thread_executor.submit(func, self, **new_kwargs)
             return future
         return pass_to_thread
-    
+
 def confirm_state_before_callback_execution(self_obj, callback_func, state_func):
         '''simple wrapper to confirm ir beambreak before executing a callback'''
         
-        for i in range(3):
+        cycles_required = 2
+        for i in range(2):
             if not state_func():
-                print('callback tried, but state function failed')
+                print('callback triggered, but could not confirm signal')
                 break
             else:
-                time.sleep(0.02)
-        if i == 2:
+                time.sleep(0.015)
+        if i == cycles_required-1:
             callback_func()
             
         
@@ -82,7 +83,7 @@ class IR_beambreak:
     def set_callback(self, func):
         
         wrapper = partial(confirm_state_before_callback_execution,  callback_func = func, state_func = self.is_blocked)
-        GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = wrapper, bouncetime = 200)
+        GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = wrapper, bouncetime = 100)
     
     def is_blocked(self):
         return GPIO.input(self.pin) == self.blocked_value
@@ -125,7 +126,7 @@ class Button:
     def is_pressed(self):
         return GPIO.input(self.pin) == self.pressed_val
     
-    def set_callback(self, func, bouncetime = 500):
+    def set_callback(self, func, bouncetime = 100):
         print(f'setting callback on {self.pin}')
         wrapper = partial(confirm_state_before_callback_execution, callback_func = func, state_func = self.is_pressed)
         GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = wrapper, bouncetime = bouncetime)
@@ -175,6 +176,7 @@ class Two_Beambreak_LED_Button_Combo:
     def exit_func(self):
         return self.exit
     
+    @thread_it
     def entry_state(self, reward_time = 45):
         ''''''
         print('entry state')
@@ -239,7 +241,7 @@ class Two_Beambreak_LED_Button_Combo:
         print(f'\n\ntraversal_count +=1 for {beam_ID}\n{self.ID} {1} {self.notes_1}: {self.traversal_counts[1]} | {self.ID} {2} {self.notes_2}: {self.traversal_counts[2]}\n\n')
         'box_ID, beam_ID, time (since start), event, latency, notes'
         self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time , f'{beam_ID} traversal',self.traversal_counts[beam_ID], time.time()-self.latency_from, notes))
-        self.button.set_callback(func=lambda x: self.reward_cancel_state(beam_ID, notes))
+        self.button.set_callback(func=partial(self.reward_cancel_state, beam_ID, notes))
         start = time.time()
         self.state = 'reward'
         self.latency_from = time.time()
