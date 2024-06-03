@@ -2,20 +2,20 @@ animals:
 #titles here must match the names of the boxes
 #in the 'hardware' section
   box_1:
-    focal: 7000
-    novel: None
+    focal: 6507
+    novel: 7035
     side_notes:
-      ir_1: 'partner'
-      ir_2: 'novel'
+      ir_1: 'novel'
+      ir_2: 'partner'
 
-  box_2:
-    focal: 7001
-    novel: None
-    ir_1: 'partner'
-    ir_2: 'novel'
-    side_notes:
-      ir_1: 'partner'
-      ir_2: 'novel'
+ # box_2:
+ #   focal: 7001
+ #   novel: None
+ #   ir_1: 'partner'
+ #   ir_2: 'novel'
+ #   side_notes:
+ #     ir_1: 'partner'
+ #     ir_2: 'novel'
 
   # box_3:
   #   focal: 7002
@@ -28,9 +28,9 @@ animals:
   #   ir_2: 'novel'
 
 software:
-  reward_period: 3
-  total_time: 60
-  save_path: '/home/donaldsonlab/yana/outputs'
+  reward_period: 30
+  total_time: 900
+  save_path: '/home/donaldsonlab/kelly/outputs'
 
 hardware:
   box_1:
@@ -38,11 +38,11 @@ hardware:
     ir_2: 18
     button: 4
     led: 0
-  box_2:
-    ir_1: 22
-    ir_2: 23
-    button: 27
-    led: 1
+#  box_2:
+#    ir_1: 22
+#    ir_2: 23
+#    button: 27
+#    led: 1
   # box_3:
   #   ir_1: 19
   #   ir_2: 21

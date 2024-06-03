@@ -64,7 +64,7 @@ class IR_beambreak:
     def stop_testing(self):
         self.testing = False
     def set_callback(self, func):
-         GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = func)
+         GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = func, bouncetime = 1000)
         
     '''def callback(self, func_list):
         if not isinstance(func_list, list):
@@ -148,7 +148,7 @@ class Two_Beambreak_LED_Button_Combo:
         self.button.clear_callback()
         self.button.set_callback(self.shut_down)
         print(f'{self.ID} in exit state')
-        self.LED.set_on()
+        self.LED.flash(frequency = 0.2, interrupt_func = self.LED.interrupt_LED)
         
     def exit_func(self):
         return self.exit
@@ -181,7 +181,17 @@ class Two_Beambreak_LED_Button_Combo:
         self.start_time = time.time()
         self.started = True
         self.ready_state(channel)
-        
+    
+    @thread_it
+    def reward_cancel_state(self, beam_ID, notes):
+        print('reward canceled state')
+        self.state = 'reward_canceled'
+        self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time, 'reward_canceled', '', time.time()-self.latency_from, notes))
+        self.beambreak_1.clear_callback()
+        self.beambreak_2.clear_callback()
+        self.button.clear_callback()
+        self.ready_state()
+
     def ready_state(self, channel = None):
         self.beambreak_1.clear_callback()
         self.beambreak_2.clear_callback()
@@ -189,31 +199,37 @@ class Two_Beambreak_LED_Button_Combo:
         self.LED.set_off()
         print('ready state')
         self.state = 'ready'
-        self.write_to_screen(f'traversal_counts for {self.ID}: {self.traversal_counts}')
+        #self.write_to_screen(f'traversal_counts for {self.ID}: {self.traversal_counts}')
         self.timestamp_writer.write_timestamp((self.ID, '', time.time() - self.start_time, 'reset', '', time.time()-self.latency_from, ''))
         self.latency_from = time.time()
         
         self.beambreak_1.set_callback(func=lambda x: self.beam_broken_state(1, self.notes_1))
         self.beambreak_2.set_callback(func=lambda x: self.beam_broken_state(2, self.notes_2))
 
+    @thread_it
     def beam_broken_state(self, beam_ID, notes = None):
+        self.LED.set_on()
         self.beambreak_1.clear_callback()
         self.beambreak_2.clear_callback()
         self.button.clear_callback()
+        
         self.traversal_counts[beam_ID] += 1
         print(f'\n\ntraversal_count +=1 for {beam_ID}\n{self.ID} {1} {self.notes_1}: {self.traversal_counts[1]} | {self.ID} {2} {self.notes_2}: {self.traversal_counts[2]}\n\n')
         'box_ID, beam_ID, time (since start), event, latency, notes'
         self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time , f'{beam_ID} traversal',self.traversal_counts[beam_ID], time.time()-self.latency_from, notes))
-        
+        self.button.set_callback(func=lambda x: self.reward_cancel_state(beam_ID, notes))
         start = time.time()
         self.state = 'reward'
-        while time.time() - start < self.reward_time:
-            time.sleep(0.1)
-        print(f'{self.ID} reward period over')
-        self.LED.flash(frequency = 0.5, interrupt_func = self.LED.interrupt_LED)
-        self.button.set_callback(self.ready_state)
-        self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time, 'reward_period_end','', '', notes))
         self.latency_from = time.time()
+        while time.time() - start < self.reward_time and self.state == 'reward':
+            time.sleep(0.1)
+        if self.state == 'reward':
+            print(f'{self.ID} reward period over')
+            self.LED.flash(frequency = 0.5, interrupt_func = self.LED.interrupt_LED)
+            self.button.clear_callback()
+            self.button.set_callback(self.ready_state)
+            self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time, 'reward_period_end','', '', notes))
+            self.latency_from = time.time()
         
     def write_to_screen(self, message):
         print(f'\n{self.ID}: {message}\n')
