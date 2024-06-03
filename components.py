@@ -36,6 +36,19 @@ def thread_it(func):
             future = thread_executor.submit(func, self, **new_kwargs)
             return future
         return pass_to_thread
+    
+def confirm_state_before_callback_execution(func, state_func):
+        '''simple wrapper to confirm ir beambreak before executing a callback'''
+        
+        for i in range(3):
+            if not state_func():
+                break
+            else:
+                time.sleep(0.02)
+        if i == 3:
+            func()
+            
+        
 
 
 class FakeTimestampManager:
@@ -63,15 +76,11 @@ class IR_beambreak:
     
     def stop_testing(self):
         self.testing = False
+        
     def set_callback(self, func):
-         GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = func)
         
-    '''def callback(self, func_list):
-        if not isinstance(func_list, list):
-            func_list = [func_list]
-        
-        for func in func_list():
-            func()'''
+        wrapper = lambda x: confirm_state_before_callback_execution(func, self.is_blocked)
+        GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = wrapper, bouncetime = 200)
     
     def is_blocked(self):
         return GPIO.input(self.pin) == self.blocked_value
@@ -103,11 +112,21 @@ class Button:
         self.pin = pin_number
         self.pu_pd = pullup_pulldown 
         GPIO.setup(self.pin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-        self.blocked_value = 1    
+        if pullup_pulldown == 'pullup':
+            GPIO.setup(self.pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            self.pressed_val = 0
+            
+        elif pullup_pulldown == 'pulldown':
+            GPIO.setup(self.pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+            self.pressed_val = 1    
+    
+    def is_pressed(self):
+        return GPIO.intput(self.pin) == self.pressed_value
     
     def set_callback(self, func, bouncetime = 1000):
         print(f'setting callback on {self.pin}')
-        GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = func, bouncetime = bouncetime)
+        wrapper = lambda x: confirm_state_before_callback_execution(func, self.is_pressed)
+        GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = wrapper, bouncetime = bouncetime)
     def clear_callback(self):
         GPIO.remove_event_detect(self.pin)
 
