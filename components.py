@@ -18,6 +18,7 @@ except Exception as e:
     
 import queue
 import inspect
+from functools import partial
 
 thread_executor = ThreadPoolExecutor(max_workers = 20)
 
@@ -37,16 +38,17 @@ def thread_it(func):
             return future
         return pass_to_thread
     
-def confirm_state_before_callback_execution(func, state_func):
+def confirm_state_before_callback_execution(self_obj, callback_func, state_func):
         '''simple wrapper to confirm ir beambreak before executing a callback'''
         
         for i in range(3):
             if not state_func():
+                print('callback tried, but state function failed')
                 break
             else:
                 time.sleep(0.02)
-        if i == 3:
-            func()
+        if i == 2:
+            callback_func()
             
         
 
@@ -79,7 +81,7 @@ class IR_beambreak:
         
     def set_callback(self, func):
         
-        wrapper = lambda x: confirm_state_before_callback_execution(func, self.is_blocked)
+        wrapper = partial(confirm_state_before_callback_execution,  callback_func = func, state_func = self.is_blocked)
         GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = wrapper, bouncetime = 200)
     
     def is_blocked(self):
@@ -121,12 +123,13 @@ class Button:
             self.pressed_val = 1    
     
     def is_pressed(self):
-        return GPIO.intput(self.pin) == self.pressed_value
+        return GPIO.input(self.pin) == self.pressed_val
     
     def set_callback(self, func, bouncetime = 500):
         print(f'setting callback on {self.pin}')
-        wrapper = lambda x: confirm_state_before_callback_execution(func, self.is_pressed)
+        wrapper = partial(confirm_state_before_callback_execution, callback_func = func, state_func = self.is_pressed)
         GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = wrapper, bouncetime = bouncetime)
+
     def clear_callback(self):
         GPIO.remove_event_detect(self.pin)
 
@@ -212,8 +215,8 @@ class Two_Beambreak_LED_Button_Combo:
         self.timestamp_writer.write_timestamp((self.ID, '', time.time() - self.start_time, 'reset', '', time.time()-self.latency_from, ''))
         self.latency_from = time.time()
         
-        self.beambreak_1.set_callback(func=lambda x: self.beam_broken_state(1, self.notes_1))
-        self.beambreak_2.set_callback(func=lambda x: self.beam_broken_state(2, self.notes_2))
+        self.beambreak_1.set_callback(func=partial(self.beam_broken_state, 1, self.notes_1))
+        self.beambreak_2.set_callback(func=partial(self.beam_broken_state, 2, self.notes_2))
 
     def beam_broken_state(self, beam_ID, notes = None):
         self.beambreak_1.clear_callback()
