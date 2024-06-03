@@ -123,7 +123,7 @@ class Button:
     def is_pressed(self):
         return GPIO.intput(self.pin) == self.pressed_value
     
-    def set_callback(self, func, bouncetime = 1000):
+    def set_callback(self, func, bouncetime = 500):
         print(f'setting callback on {self.pin}')
         wrapper = lambda x: confirm_state_before_callback_execution(func, self.is_pressed)
         GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = wrapper, bouncetime = bouncetime)
