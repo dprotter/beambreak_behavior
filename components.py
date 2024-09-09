@@ -62,13 +62,6 @@ class IR_beambreak:
         self.testing = False
     def set_callback(self, func):
          GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = func)
-        
-    '''def callback(self, func_list):
-        if not isinstance(func_list, list):
-            func_list = [func_list]
-        
-        for func in func_list():
-            func()'''
     
     def is_blocked(self):
         return self.pin.value == self.blocked_value
