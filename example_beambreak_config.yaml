@@ -7,6 +7,8 @@ animals:
     side_notes:
       ir_1: 'novel'
       ir_2: 'partner'
+      ir_3: 'novel_top'
+      ir_4: 'partner_top'
 
  # box_2:
  #   focal: 7001
@@ -36,6 +38,8 @@ hardware:
   box_1:
     ir_1: 17
     ir_2: 18
+    ir_3: 19
+    ir_4: 20
     button: 4
     led: 0
 #  box_2:

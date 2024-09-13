@@ -20,10 +20,14 @@ def make_beambreak_pair(yaml_file, box_id, timestamp_writer):
     led = LED(yaml_file['hardware'][box_id]['led'])
     ir_1 = IR_beambreak(yaml_file['hardware'][box_id]['ir_1'])
     ir_2 = IR_beambreak(yaml_file['hardware'][box_id]['ir_2'])
+    ir_3 = IR_beambreak(yaml_file['hardware'][box_id]['ir_3'])
+    ir_4 = IR_beambreak(yaml_file['hardware'][box_id]['ir_4'])
     
     if 'side_notes' in yaml_file['animals'][box_id]:
         note_1 = yaml_file['animals'][box_id]['side_notes']['ir_1']
         note_2 = yaml_file['animals'][box_id]['side_notes']['ir_2']
+        note_3 = yaml_file['animals'][box_id]['side_notes']['ir_3']
+        note_4 = yaml_file['animals'][box_id]['side_notes']['ir_4']
         
     else:
         note_1, note_2 = None, None

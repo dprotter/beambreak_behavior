@@ -68,7 +68,8 @@ class FakeTimestampManager:
     
 class IR_beambreak:
     
-    def __init__(self, pin_number, pullup_pulldown = 'pullup', timestamp_writer = None):
+    def __init__(self, pin_number, pullup_pulldown = 'pullup', 
+                 timestamp_writer = None, ID = None, notes = None):
         ''''''
         self.pin_number = pin_number
         self.pu_pd = pullup_pulldown    
@@ -76,6 +77,13 @@ class IR_beambreak:
         GPIO.setup(self.pin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
         self.testing = False
         self.blocked_value = 0
+        self.ID = ID
+        self.name = notes
+        self.start_time = 0
+        self.beam_break_count = 0
+    
+    def begin(self, start_time):
+        self.start_time = start_time
     
     def stop_testing(self):
         self.testing = False
@@ -88,6 +96,27 @@ class IR_beambreak:
     def is_blocked(self):
         return GPIO.input(self.pin) == self.blocked_value
     
+    def record_durations(self):
+        '''will block program exit until round trip from begin_duration -> submit_duration -> record_durations'''
+        if self.testing:
+            self.set_callback(func=partial(self.begin_duration, time.time()))
+        else:
+            self.clear_callback()
+    
+    def begin_duration(self, incoming_time):
+        #for 2 beambreak behavior rig ['ID', 'beam', 'elapsed_time', 'event','count', 'latency','notes']
+        self.timestamp_writer.write_timestamp((self.ID, self.name, incoming_time - self.start_time, 
+                                               'beam_break_initiation', self.beam_break_count, 
+                                               '', self.notes))
+        self.set_callback(func=partial(self.submit_duration, incoming_time))
+    
+    def submit_duration(self, incoming_time):
+        duration = time.time() - incoming_time
+        #for 2 beambreak behavior rig ['ID', 'beam', 'elapsed_time', 'event','count', 'latency','notes']
+        self.timestamp_writer.write_timestamp((self.ID, self.name, incoming_time - self.start_time, 
+                                               'beam_break_duration', self.beam_break_count, 
+                                               duration, self.notes))
+        
     def clear_callback(self):
         GPIO.remove_event_detect(self.pin)
     
@@ -180,6 +209,7 @@ class Two_Beambreak_LED_Button_Combo:
     def entry_state(self, reward_time = 45):
         ''''''
         print('entry state')
+        
         if self.beambreak_1.is_blocked():
             print(f'box {self.name} beambreak 1 is blocked')
         
@@ -333,4 +363,130 @@ class LED:
         self.set_off()
             
             
+class Four_Beambreak_LED_Button_Combo:
+    def __init__(self, beambreak_1, beambreak_2, beambreak_3, beambreak_4, led, button, box_ID, notes_1 = None, notes_2 = None, timestamp_writer = None, screen_writer = None):
+        self.ID = box_ID
+        self.traversal_counts = {1:0, 2:0}
+        self.beambreak_1 = beambreak_1
+        self.beambreak_2 = beambreak_2
+        self.beambreak_3 = beambreak_3
+        self.beambreak_4 = beambreak_4
+        self.all_breaks =[self.beambreak_1, self.beambreak_2, self.beambreak_3, self.beambreak_4]
+        self.LED = led
+        self.button = button
+        self.timestamp_writer = FakeTimestampManager() if not timestamp_writer else timestamp_writer
+        self.write_to_screen = self.write_to_screen if screen_writer == None else screen_writer.write
+        self.exit = False
+        self.notes_1 = notes_1 if notes_1 else ''
+        self.notes_2 = notes_2 if notes_2 else ''
+        
+        self.started = False
+        
+        self.header_list = ['ID', 'beam', 'elapsed_time', 'event','count', 'latency','notes']
+        self.timestamp_writer.create_file(self.header_list)
+        self.state = None
+    
+    def shut_down(self, channel = None):
+        '''func to finish this IR pair run. turn off LEDs and set exit attribute to true'''
+        print(f'{self.ID} shut down')
+        self.LED.set_off()
+        self.set_exit_to_true()
+        
+    def set_exit_to_true(self, channel = None):
+        self.exit = True
+    
+    def exit_state(self):
+        ''''''
+        self.beambreak_1.clear_callback()
+        self.beambreak_2.clear_callback()
+        self.state = 'exit'
+        self.button.clear_callback()
+        self.button.set_callback(self.shut_down)
+        print(f'{self.ID} in exit state')
+        self.LED.flash(frequency = 0.2, interrupt_func = self.LED.interrupt_LED)
+        
+    def exit_func(self):
+        return self.exit
+    
+    @thread_it
+    def entry_state(self, reward_time = 45):
+        ''''''
+        print('entry state')
+        if self.beambreak_1.is_blocked():
+            print(f'box {self.name} beambreak 1 is blocked')
+        
+        if self.beambreak_1.is_blocked():
+            print(f'box {self.name} beambreak 2 is blocked')
+        
+        if self.beambreak_1.is_blocked() or self.beambreak_2.is_blocked():
+            print('waiting for beambreaks to be unblocked')
+            while self.beambreak_1.is_blocked() or self.beambreak_2.is_blocked():
+                time.sleep(0.5)
+        
+        self.state = 'entry'
+        self.reward_time = reward_time
+        self.LED.set_on()
+        self.latency_from = time.time()
+        self.button.set_callback(self.begin)
+    
+    def check_state(self, state_query):
+        return self.state == state_query
+    
+    def begin(self, channel = None):
+        self.button.clear_callback()
+        self.start_time = time.time()
+        self.started = True
+        self.ready_state(channel)
+    
+    @thread_it
+    def reward_cancel_state(self, beam_ID, notes):
+        print('reward canceled state')
+        self.state = 'reward_canceled'
+        self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time, 'reward_canceled', '', time.time()-self.latency_from, notes))
+        self.beambreak_1.clear_callback()
+        self.beambreak_2.clear_callback()
+        self.button.clear_callback()
+        self.ready_state()
+
+    def ready_state(self, channel = None):
+        self.beambreak_1.clear_callback()
+        self.beambreak_2.clear_callback()
+        self.button.clear_callback()
+        self.LED.set_off()
+        print('ready state')
+        self.state = 'ready'
+        #self.write_to_screen(f'traversal_counts for {self.ID}: {self.traversal_counts}')
+        self.timestamp_writer.write_timestamp((self.ID, '', time.time() - self.start_time, 'reset', '', time.time()-self.latency_from, ''))
+        self.latency_from = time.time()
+        
+        self.beambreak_1.set_callback(func=partial(self.beam_broken_state, 1, self.notes_1))
+        self.beambreak_2.set_callback(func=partial(self.beam_broken_state, 2, self.notes_2))
+
+    @thread_it
+    def beam_broken_state(self, beam_ID, notes = None):
+        self.LED.set_on()
+        self.beambreak_1.clear_callback()
+        self.beambreak_2.clear_callback()
+        self.button.clear_callback()
+        
+        self.traversal_counts[beam_ID] += 1
+        print(f'\n\ntraversal_count +=1 for {beam_ID}\n{self.ID} {1} {self.notes_1}: {self.traversal_counts[1]} | {self.ID} {2} {self.notes_2}: {self.traversal_counts[2]}\n\n')
+        'box_ID, beam_ID, time (since start), event, latency, notes'
+        self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time , f'{beam_ID} traversal',self.traversal_counts[beam_ID], time.time()-self.latency_from, notes))
+        self.button.set_callback(func=partial(self.reward_cancel_state, beam_ID, notes))
+        start = time.time()
+        self.state = 'reward'
+        self.latency_from = time.time()
+        while time.time() - start < self.reward_time and self.state == 'reward':
+            time.sleep(0.1)
+        if self.state == 'reward':
+            print(f'{self.ID} reward period over')
+            self.LED.flash(frequency = 0.5, interrupt_func = self.LED.interrupt_LED)
+            self.button.clear_callback()
+            self.button.set_callback(self.ready_state)
+            self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time, 'reward_period_end','', '', notes))
+            self.latency_from = time.time()
+        
+    def write_to_screen(self, message):
+        print(f'\n{self.ID}: {message}\n')
         
