@@ -81,23 +81,36 @@ class IR_beambreak:
         self.name = notes
         self.start_time = 0
         self.beam_break_count = 0
-    
+        self.timestamp_writer = FakeTimestampManager() if not timestamp_writer else timestamp_writer
+        self.notes = notes if notes else ''
+
     def begin(self, start_time):
         self.start_time = start_time
+        self.testing = True
     
     def stop_testing(self):
         self.testing = False
         
-    def set_callback(self, func):
-        
-        wrapper = partial(confirm_state_before_callback_execution,  callback_func = func, state_func = self.is_blocked)
-        GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = wrapper, bouncetime = 100)
+    def set_callback(self, func, edge = 'falling'):
+        if edge == 'rising':
+            wrapper = partial(confirm_state_before_callback_execution,  callback_func = func, state_func = self.is_unblocked)
+            GPIO.add_event_detect(self.pin, GPIO.RISING, callback = wrapper, bouncetime = 100)
+        elif edge == 'falling':
+            wrapper = partial(confirm_state_before_callback_execution,  callback_func = func, state_func = self.is_blocked)
+            GPIO.add_event_detect(self.pin, GPIO.RISING, callback = wrapper, bouncetime = 100)
+        else:
+            raise Exception(f'edge must be "falling" or "rising" but was {edge}')
     
     def is_blocked(self):
         return GPIO.input(self.pin) == self.blocked_value
     
+    def is_unblocked(self):
+        return GPIO.input(self.pin) != self.blocked_value
+    
     def record_durations(self):
         '''will block program exit until round trip from begin_duration -> submit_duration -> record_durations'''
+        print(f'enter_duration {self.pin}')
+        self.clear_callback()
         if self.testing:
             self.set_callback(func=partial(self.begin_duration, time.time()))
         else:
@@ -105,17 +118,23 @@ class IR_beambreak:
     
     def begin_duration(self, incoming_time):
         #for 2 beambreak behavior rig ['ID', 'beam', 'elapsed_time', 'event','count', 'latency','notes']
+        self.clear_callback()
+        print(f'begin duration on ir pin{self.pin}')
+        
         self.timestamp_writer.write_timestamp((self.ID, self.name, incoming_time - self.start_time, 
                                                'beam_break_initiation', self.beam_break_count, 
                                                '', self.notes))
-        self.set_callback(func=partial(self.submit_duration, incoming_time))
+        self.set_callback(func=partial(self.submit_duration, incoming_time), edge = 'rising')
     
     def submit_duration(self, incoming_time):
+        self.clear_callback()
         duration = time.time() - incoming_time
+        print(f'submit duration {duration} on ir pin{self.pin}')
         #for 2 beambreak behavior rig ['ID', 'beam', 'elapsed_time', 'event','count', 'latency','notes']
         self.timestamp_writer.write_timestamp((self.ID, self.name, incoming_time - self.start_time, 
                                                'beam_break_duration', self.beam_break_count, 
                                                duration, self.notes))
+        self.record_durations()
         
     def clear_callback(self):
         GPIO.remove_event_detect(self.pin)
@@ -367,8 +386,12 @@ class Four_Beambreak_LED_Button_Combo:
     def __init__(self, beambreak_1, beambreak_2, beambreak_3, beambreak_4, led, button, box_ID, notes_1 = None, notes_2 = None, timestamp_writer = None, screen_writer = None):
         self.ID = box_ID
         self.traversal_counts = {1:0, 2:0}
+        
+        #these are traversal beambreaks
         self.beambreak_1 = beambreak_1
         self.beambreak_2 = beambreak_2
+        
+        #these are top-of-wall beambreaks
         self.beambreak_3 = beambreak_3
         self.beambreak_4 = beambreak_4
         self.all_breaks =[self.beambreak_1, self.beambreak_2, self.beambreak_3, self.beambreak_4]
@@ -399,6 +422,8 @@ class Four_Beambreak_LED_Button_Combo:
         ''''''
         self.beambreak_1.clear_callback()
         self.beambreak_2.clear_callback()
+        self.beambreak_3.clear_callback()
+        self.beambreak_4.clear_callback()
         self.state = 'exit'
         self.button.clear_callback()
         self.button.set_callback(self.shut_down)
@@ -412,16 +437,15 @@ class Four_Beambreak_LED_Button_Combo:
     def entry_state(self, reward_time = 45):
         ''''''
         print('entry state')
-        if self.beambreak_1.is_blocked():
-            print(f'box {self.name} beambreak 1 is blocked')
         
-        if self.beambreak_1.is_blocked():
-            print(f'box {self.name} beambreak 2 is blocked')
-        
-        if self.beambreak_1.is_blocked() or self.beambreak_2.is_blocked():
-            print('waiting for beambreaks to be unblocked')
-            while self.beambreak_1.is_blocked() or self.beambreak_2.is_blocked():
-                time.sleep(0.5)
+        if any([b.is_blocked() for b in self.all_breaks]):
+            blocked = [b.name for b in self.all_breaks]
+            print(f'blocked beams: {blocked}')
+            
+            if any([b.is_blocked() for b in self.all_breaks]):
+                print('waiting for beambreaks to be unblocked')
+                while any([b.is_blocked() for b in self.all_breaks]):
+                    time.sleep(0.5)
         
         self.state = 'entry'
         self.reward_time = reward_time
@@ -436,6 +460,10 @@ class Four_Beambreak_LED_Button_Combo:
         self.button.clear_callback()
         self.start_time = time.time()
         self.started = True
+        self.beambreak_3.begin(self.start_time)
+        self.beambreak_4.begin(self.start_time)
+        self.beambreak_3.record_durations()
+        self.beambreak_4.record_durations()
         self.ready_state(channel)
     
     @thread_it
