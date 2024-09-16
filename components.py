@@ -171,7 +171,7 @@ class IR_beambreak:
         
         #can enter in an unblocked state
         if self.is_unblocked():
-            print('\n\nentering begin_duration in an unblocked state\n\n')
+            #print('\n\nentering begin_duration in an unblocked state\n\n')
             #directly check state with confirm_state func. go to begin_duration with current time. return to this func if state is not confirmed
             partial_in_case_of_callback_failure = partial(self.begin_duration, incoming_time)
             confirm_state_before_callback_execution(self_obj = self, callback_func=partial(self.submit_duration, incoming_time), 
