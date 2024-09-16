@@ -16,21 +16,28 @@ import csv
 args = parser.parse_args()
 
 def make_beambreak_pair(yaml_file, box_id, timestamp_writer):
-    button = Button(yaml_file['hardware'][box_id]['button'])
-    led = LED(yaml_file['hardware'][box_id]['led'])
-    ir_1 = IR_beambreak(yaml_file['hardware'][box_id]['ir_1'])
-    ir_2 = IR_beambreak(yaml_file['hardware'][box_id]['ir_2'])
-    ir_3 = IR_beambreak(yaml_file['hardware'][box_id]['ir_3'], timestamp_writer = timestamp_writer)
-    ir_4 = IR_beambreak(yaml_file['hardware'][box_id]['ir_4'], timestamp_writer = timestamp_writer)
-    
     if 'side_notes' in yaml_file['animals'][box_id]:
         note_1 = yaml_file['animals'][box_id]['side_notes']['ir_1']
         note_2 = yaml_file['animals'][box_id]['side_notes']['ir_2']
         note_3 = yaml_file['animals'][box_id]['side_notes']['ir_3']
         note_4 = yaml_file['animals'][box_id]['side_notes']['ir_4']
-        
+
     else:
-        note_1, note_2 = None, None
+        note_1 = f"pin {yaml_file['hardware'][box_id]['ir_1']['pin']}"
+        note_2 = f"pin {yaml_file['hardware'][box_id]['ir_2']['pin']}"
+        note_3 = f"pin {yaml_file['hardware'][box_id]['ir_3']['pin']}"
+        note_4 = f"pin {yaml_file['hardware'][box_id]['ir_4']['pin']}"
+
+    button = Button(yaml_file['hardware'][box_id]['button'])
+    led = LED(yaml_file['hardware'][box_id]['led'])
+    ir_1 = IR_beambreak(yaml_file['hardware'][box_id]['ir_1'])
+    ir_2 = IR_beambreak(yaml_file['hardware'][box_id]['ir_2'])
+    ir_3 = IR_beambreak(yaml_file['hardware'][box_id]['ir_3'], timestamp_writer = timestamp_writer, notes = note_3)
+    ir_4 = IR_beambreak(yaml_file['hardware'][box_id]['ir_4'], timestamp_writer = timestamp_writer, notes = note_4)
+    
+    
+        
+    
     
     return Four_Beambreak_LED_Button_Combo(
                                           beambreak_1 = ir_1, 
@@ -41,7 +48,9 @@ def make_beambreak_pair(yaml_file, box_id, timestamp_writer):
                                           button = button, 
                                           box_ID = box_id, 
                                           notes_1 = note_1, 
-                                          notes_2 = note_2, 
+                                          notes_2 = note_2,
+                                          notes_3 = note_3, 
+                                          notes_4 = note_4, 
                                           timestamp_writer = timestamp_writer)
     
     
