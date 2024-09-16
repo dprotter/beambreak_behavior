@@ -19,6 +19,7 @@ except Exception as e:
 import queue
 import inspect
 from functools import partial
+import functools as functools
 
 thread_executor = ThreadPoolExecutor(max_workers = 20)
 
@@ -38,18 +39,47 @@ def thread_it(func):
             return future
         return pass_to_thread
 
-def confirm_state_before_callback_execution(self_obj, callback_func, state_func):
+def confirm_state_before_callback_execution(self_obj, callback_func, state_func, failure_func = None):
         '''simple wrapper to confirm ir beambreak before executing a callback'''
         
         cycles_required = 2
-        for i in range(2):
+
+        failure_cycles = 20
+        
+        success_rate_limit = 0.9
+        for i in range(cycles_required):
             if not state_func():
-                print('callback triggered, but could not confirm signal')
+                if isinstance(callback_func, functools.partial):
+                    print(f'\ncallback func {callback_func.func.__name__} triggered, but could not confirm signal --> polling for {failure_cycles} expecting {success_rate_limit} match')
+                else:
+                     print(f'\ncallback func {callback_func.__name__} triggered, but could not confirm signal --> polling for {failure_cycles} expecting {success_rate_limit} match')
                 break
             else:
                 time.sleep(0.015)
         if i == cycles_required-1:
             callback_func()
+        else:
+            failure_list = [state_func() for _ in range(failure_cycles)]
+            measured_rate = sum(failure_list)/failure_cycles
+            print(f'failure of conformation state success rate = {measured_rate}\n')
+            if measured_rate >= success_rate_limit:
+                callback_func()
+            elif not failure_func is None:
+                
+                
+                if isinstance(failure_func, functools.partial):
+                    print(f'utilizing failure function {failure_func.func.__name__}')
+                else:
+                    print(f'utilizing failure function {failure_func.__name__}')
+                failure_func()
+            else:
+                pass
+            
+
+
+
+
+
             
         
 
@@ -81,39 +111,98 @@ class IR_beambreak:
         self.name = notes
         self.start_time = 0
         self.beam_break_count = 0
-    
+        self.timestamp_writer = FakeTimestampManager() if not timestamp_writer else timestamp_writer
+        self.notes = notes if notes else ''
+
     def begin(self, start_time):
         self.start_time = start_time
+        self.testing = True
     
     def stop_testing(self):
         self.testing = False
         
-    def set_callback(self, func):
-         GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = func, bouncetime = 1000)
+    def set_callback(self, func, edge = 'falling', failure_func = None):
+        self.clear_callback()
+        if edge == 'rising':
+            wrapper = partial(confirm_state_before_callback_execution,  callback_func = func, state_func = self.is_unblocked, failure_func = failure_func)
+            GPIO.add_event_detect(self.pin, GPIO.RISING, callback = wrapper, bouncetime = 100)
+        elif edge == 'falling':
+            wrapper = partial(confirm_state_before_callback_execution,  callback_func = func, state_func = self.is_blocked, failure_func = failure_func)
+            GPIO.add_event_detect(self.pin, GPIO.FALLING, callback = wrapper, bouncetime = 100)
+        else:
+            raise Exception(f'edge must be "falling" or "rising" but was {edge}')
     
     def is_blocked(self):
         return GPIO.input(self.pin) == self.blocked_value
     
+    def is_unblocked(self):
+        return GPIO.input(self.pin) != self.blocked_value
+    
     def record_durations(self):
         '''will block program exit until round trip from begin_duration -> submit_duration -> record_durations'''
+        #print(f'enter record durations on  {self.pin}')
+        self.clear_callback()
+        
         if self.testing:
-            self.set_callback(func=partial(self.begin_duration, time.time()))
+             #can enter in a blocked state if state func was not confirmed by wrapper of set_callback
+            if self.is_blocked():
+                #print('\n\nentering record durations in a blocked state\n\n')
+                #directly check state with confirm_state func. go to begin_duration with current time. return to this func if state is not confirmed
+                confirm_state_before_callback_execution(self_obj = self, callback_func=partial(self.begin_duration), 
+                                                        state_func = self.is_blocked, 
+                                                        failure_func = self.record_durations)
+            else:
+                #if not blocked, set callback as usual 
+                #print(f'setting callback for begin_duration as usual on {self.pin}')
+                self.set_callback(func=partial(self.begin_duration), 
+                                    edge = 'falling', 
+                                    failure_func = self.record_durations)
         else:
             self.clear_callback()
     
-    def begin_duration(self, incoming_time):
+    def begin_duration(self, incoming_time = None):
+        '''this function can take an incoming time for recovery if a rising edge cannot be confirmed before
+        moving to "submit_duration" '''
         #for 2 beambreak behavior rig ['ID', 'beam', 'elapsed_time', 'event','count', 'latency','notes']
-        self.timestamp_writer.write_timestamp((self.ID, self.name, incoming_time - self.start_time, 
-                                               'beam_break_initiation', self.beam_break_count, 
-                                               '', self.notes))
-        self.set_callback(func=partial(self.submit_duration, incoming_time))
+        self.clear_callback()
+        
+        if incoming_time is None:
+            incoming_time = time.time()
+        
+        #can enter in an unblocked state
+        if self.is_unblocked():
+            print('\n\nentering begin_duration in an unblocked state\n\n')
+            #directly check state with confirm_state func. go to begin_duration with current time. return to this func if state is not confirmed
+            partial_in_case_of_callback_failure = partial(self.begin_duration, incoming_time)
+            confirm_state_before_callback_execution(self_obj = self, callback_func=partial(self.submit_duration, incoming_time), 
+                                                    state_func = self.is_unblocked, 
+                                                    failure_func = partial_in_case_of_callback_failure)
+        else:
+            print(f'begin duration on ir pin{self.pin}')
+            self.timestamp_writer.write_timestamp((self.ID, self.name, incoming_time - self.start_time, 
+                                                'beam_break_initiation', self.beam_break_count, 
+                                                '', self.notes))
+
+            #set the callback with rising edge detection. if it fails, return to the start of begin_duration and check beam there
+            partial_in_case_of_callback_failure = partial(self.set_callback, partial(self.submit_duration, incoming_time), edge = 'rising', 
+                                            failure_func = partial(self.begin_duration, incoming_time))
+            self.set_callback(func=partial(self.submit_duration, incoming_time), edge = 'rising', 
+                                            failure_func = partial_in_case_of_callback_failure)
+            
     
     def submit_duration(self, incoming_time):
-        duration = time.time() - incoming_time
+        self.clear_callback()
+        #can enter in an unblocked state if state func was not confirmed by wrapper of set_callback
+        now = time.time()
+        duration = now - incoming_time
+        self.beam_break_count+=1
+        print(f'submit duration {duration} count {self.beam_break_count} on ir pin{self.pin} / {self.notes}\n')
         #for 2 beambreak behavior rig ['ID', 'beam', 'elapsed_time', 'event','count', 'latency','notes']
-        self.timestamp_writer.write_timestamp((self.ID, self.name, incoming_time - self.start_time, 
+        self.timestamp_writer.write_timestamp((self.ID, self.name, now - self.start_time, 
                                                'beam_break_duration', self.beam_break_count, 
                                                duration, self.notes))
+        
+        self.record_durations()
         
     def clear_callback(self):
         GPIO.remove_event_detect(self.pin)
@@ -362,13 +451,19 @@ class LED:
             
             
 class Four_Beambreak_LED_Button_Combo:
-    def __init__(self, beambreak_1, beambreak_2, beambreak_3, beambreak_4, led, button, box_ID, notes_1 = None, notes_2 = None, timestamp_writer = None, screen_writer = None):
+    def __init__(self, beambreak_1, beambreak_2, beambreak_3, beambreak_4, led, button, box_ID, notes_1 = None, notes_2 = None, notes_3 = None, notes_4 = None, timestamp_writer = None, screen_writer = None):
         self.ID = box_ID
         self.traversal_counts = {1:0, 2:0}
+        
+        #these are traversal beambreaks
         self.beambreak_1 = beambreak_1
         self.beambreak_2 = beambreak_2
+        
+        #these are top-of-wall beambreaks
         self.beambreak_3 = beambreak_3
         self.beambreak_4 = beambreak_4
+        self.beambreak_3.ID = self.ID
+        self.beambreak_4.ID = self.ID
         self.all_breaks =[self.beambreak_1, self.beambreak_2, self.beambreak_3, self.beambreak_4]
         self.LED = led
         self.button = button
@@ -397,6 +492,8 @@ class Four_Beambreak_LED_Button_Combo:
         ''''''
         self.beambreak_1.clear_callback()
         self.beambreak_2.clear_callback()
+        self.beambreak_3.clear_callback()
+        self.beambreak_4.clear_callback()
         self.state = 'exit'
         self.button.clear_callback()
         self.button.set_callback(self.shut_down)
@@ -410,16 +507,16 @@ class Four_Beambreak_LED_Button_Combo:
     def entry_state(self, reward_time = 45):
         ''''''
         print('entry state')
-        if self.beambreak_1.is_blocked():
-            print(f'box {self.name} beambreak 1 is blocked')
         
-        if self.beambreak_1.is_blocked():
-            print(f'box {self.name} beambreak 2 is blocked')
-        
-        if self.beambreak_1.is_blocked() or self.beambreak_2.is_blocked():
-            print('waiting for beambreaks to be unblocked')
-            while self.beambreak_1.is_blocked() or self.beambreak_2.is_blocked():
-                time.sleep(0.5)
+        if any([b.is_blocked() for b in self.all_breaks]):
+            blocked = [b.name for b in self.all_breaks]
+            print(f'blocked beams: {blocked}')
+            
+            if any([b.is_blocked() for b in self.all_breaks]):
+                print('waiting for beambreaks to be unblocked')
+                while any([b.is_blocked() for b in self.all_breaks]):
+                    print([f'{b.is_blocked()}:{b.ID}\{b.pin}' for b in self.all_breaks])
+                    time.sleep(0.5)
         
         self.state = 'entry'
         self.reward_time = reward_time
@@ -434,6 +531,9 @@ class Four_Beambreak_LED_Button_Combo:
         self.button.clear_callback()
         self.start_time = time.time()
         self.started = True
+        self.beambreak_3.begin(self.start_time)
+        self.beambreak_4.begin(self.start_time)
+        
         self.ready_state(channel)
     
     @thread_it
@@ -449,6 +549,8 @@ class Four_Beambreak_LED_Button_Combo:
     def ready_state(self, channel = None):
         self.beambreak_1.clear_callback()
         self.beambreak_2.clear_callback()
+        self.beambreak_3.record_durations()
+        self.beambreak_4.record_durations()
         self.button.clear_callback()
         self.LED.set_off()
         print('ready state')
@@ -479,6 +581,9 @@ class Four_Beambreak_LED_Button_Combo:
             time.sleep(0.1)
         if self.state == 'reward':
             print(f'{self.ID} reward period over')
+            self.beambreak_3.clear_callback()
+            self.beambreak_4.clear_callback()
+            
             self.LED.flash(frequency = 0.5, interrupt_func = self.LED.interrupt_LED)
             self.button.clear_callback()
             self.button.set_callback(self.ready_state)
