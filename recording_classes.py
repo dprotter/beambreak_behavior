@@ -1,5 +1,6 @@
 from components import thread_it, thread_executor
 import os
+import queue
 
 def default_generate_output_fname(vole, date, vole_2 = None, title = ''):
         
@@ -21,6 +22,8 @@ class TimestampManager:
         #list of values in header
 
         self.fp = os.path.join(path, fname)
+        self.queue = queue.Queue()
+        self.writing = False
         
     
     def create_file(self, header):
@@ -28,12 +31,27 @@ class TimestampManager:
             header_string =  self.delimter.join(str(bit) for bit in header)
             f.write(header_string+'\n')            
     
-    @thread_it
+    def shut_down(self):
+        if not self.queue.empty():
+            self._write_timestamp()
+            self.queue.join()
+            
     def write_timestamp(self, line):
-        with open(self.fp, 'a') as f:
-            line_string =  self.delimter.join(str(bit) for bit in line)
-            f.write(line_string+'\n')
+        line_string =  self.delimter.join(str(bit) for bit in line)+'\n'
+        self.queue.put(line_string)
+        if not self.writing:
+            self._write_timestamp()
+            
         
+    @thread_it 
+    def _write_timestamp(self):
+        self.writing = True
+        with open(self.fp, 'a') as f:
+            while not self.queue.empty():
+                f.write(self.queue.get())
+        self.writing = False
+                
     
+        
     
     

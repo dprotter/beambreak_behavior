@@ -497,6 +497,7 @@ class Four_Beambreak_LED_Button_Combo:
         self.state = 'exit'
         self.button.clear_callback()
         self.button.set_callback(self.shut_down)
+        self.timestamp_writer.shut_down()
         print(f'{self.ID} in exit state')
         self.LED.flash(frequency = 0.2, interrupt_func = self.LED.interrupt_LED)
         
@@ -538,11 +539,11 @@ class Four_Beambreak_LED_Button_Combo:
     
     @thread_it
     def reward_cancel_state(self, beam_ID, notes):
+        self.beambreak_1.clear_callback()
+        self.beambreak_2.clear_callback()
         print('reward canceled state')
         self.state = 'reward_canceled'
         self.timestamp_writer.write_timestamp((self.ID, beam_ID, time.time() - self.start_time, 'reward_canceled', '', time.time()-self.latency_from, notes))
-        self.beambreak_1.clear_callback()
-        self.beambreak_2.clear_callback()
         self.button.clear_callback()
         self.ready_state()
 

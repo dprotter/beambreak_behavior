@@ -25,3 +25,6 @@ class Fake_timestamp_writer:
     def write_timestamp(*args, **kwargs):
         print(f'Fake_timestamp_writer received {args}\n{kwargs}')
     
+    def shut_down():
+        pass
+    
